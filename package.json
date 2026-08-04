@@ -1,0 +1,35 @@
+{
+  "name": "telegram-movie-bot",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Production-ready Telegram Movie Bot with Admin Dashboard",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:api\" \"npm run dev:web\"",
+    "dev:api": "cd apps/api && npm run dev",
+    "dev:web": "cd apps/web && npm run dev",
+    "build": "npm run build:database && npm run build:api && npm run build:web",
+    "build:database": "cd packages/database && npm run build",
+    "build:api": "cd apps/api && npm run build",
+    "build:web": "cd apps/web && npm run build",
+    "start": "concurrently \"npm run start:api\" \"npm run start:web\"",
+    "start:api": "cd apps/api && npm run start",
+    "start:web": "cd apps/web && npm run start",
+    "db:migrate": "cd packages/database && npm run migrate",
+    "db:generate": "cd packages/database && npm run generate",
+    "db:studio": "cd packages/database && npm run studio",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:build": "docker-compose build"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

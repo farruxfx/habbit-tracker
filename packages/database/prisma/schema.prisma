@@ -1,0 +1,334 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// USER MANAGEMENT
+// ============================================
+
+model User {
+  id                String    @id @default(uuid())
+  telegramId        BigInt    @unique
+  username          String?
+  firstName         String?
+  lastName          String?
+  language          String    @default("uz")
+  isBanned          Boolean   @default(false)
+  isPremium         Boolean   @default(false)
+  referralCode      String    @unique @default(cuid())
+  referredBy        String?
+  bonusPoints       Int       @default(0)
+  lastBonusClaim    DateTime?
+  searchHistory     Json      @default("[]")
+  favorites         String[]  @default([])
+  recentlyWatched   String[]  @default([])
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  lastActiveAt      DateTime  @default(now())
+  
+  // Relations
+  downloads         Download[]
+  favoritesList     Movie[]   @relation("UserFavorites")
+  referrals         User[]    @relation("UserReferrals")
+  referrer          User?     @relation("UserReferrals", fields: [referredBy], references: [referralCode])
+  
+  @@index([telegramId])
+  @@index([referralCode])
+  @@index([isBanned])
+}
+
+// ============================================
+// ADMIN & ROLES
+// ============================================
+
+model Admin {
+  id          String   @id @default(uuid())
+  email       String   @unique
+  password    String
+  firstName   String?
+  lastName    String?
+  role        Role     @default(MANAGER)
+  permissions Json     @default("[]")
+  isActive    Boolean  @default(true)
+  lastLogin   DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relations
+  auditLogs   AuditLog[]
+  
+  @@index([email])
+  @@index([role])
+}
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  MANAGER
+  MODERATOR
+}
+
+// ============================================
+// MOVIE MANAGEMENT
+// ============================================
+
+model Movie {
+  id              String   @id @default(uuid())
+  code            String   @unique
+  name            String
+  originalName    String?
+  year            Int
+  country         String?
+  duration        Int?     // in minutes
+  quality         String   @default("HD")
+  imdbRating      Float?
+  description     String?
+  posterUrl       String?
+  trailerUrl      String?
+  telegramFileId  String?
+  fileSize        BigInt?
+  downloadCount   Int      @default(0)
+  viewCount       Int      @default(0)
+  tags            String[] @default([])
+  isActive        Boolean  @default(true)
+  isPremium       Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  // Relations
+  categories      Category[]
+  genres          Genre[]
+  downloads       Download[]
+  favoritesList   User[]   @relation("UserFavorites")
+  
+  @@index([code])
+  @@index([name])
+  @@index([year])
+  @@index([isActive])
+  @@index([downloadCount])
+  @@index([viewCount])
+}
+
+model Category {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  nameUz      String?
+  nameRu      String?
+  description String?
+  icon        String?
+  order       Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relations
+  movies      Movie[]
+  
+  @@index([name])
+  @@index([order])
+}
+
+model Genre {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  nameUz      String?
+  nameRu      String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relations
+  movies      Movie[]
+  
+  @@index([name])
+}
+
+// ============================================
+// CHANNEL MANAGEMENT
+// ============================================
+
+model Channel {
+  id              String   @id @default(uuid())
+  chatId          BigInt   @unique
+  title           String
+  username        String?
+  type            String   @default("channel") // channel, group
+  isRequired      Boolean  @default(true)
+  isActive        Boolean  @default(true)
+  priority        Int      @default(0)
+  subscriberCount Int      @default(0)
+  lastChecked     DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@index([chatId])
+  @@index([isRequired])
+  @@index([isActive])
+}
+
+// ============================================
+// BOT SETTINGS
+// ============================================
+
+model BotSetting {
+  id                    String   @id @default(uuid())
+  key                   String   @unique
+  value                 String
+  description           String?
+  isEncrypted           Boolean  @default(false)
+  updatedAt             DateTime @updatedAt
+  
+  @@index([key])
+}
+
+// ============================================
+// STATISTICS & ANALYTICS
+// ============================================
+
+model DailyStatistic {
+  id              String   @id @default(uuid())
+  date            DateTime @db.Date
+  newUsers        Int      @default(0)
+  activeUsers     Int      @default(0)
+  searches        Int      @default(0)
+  downloads       Int      @default(0)
+  broadcasts      Int      @default(0)
+  messagesSent    Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@unique([date])
+  @@index([date])
+}
+
+model Download {
+  id          String   @id @default(uuid())
+  userId      String
+  movieId     String
+  createdAt   DateTime @default(now())
+  
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  movie       Movie    @relation(fields: [movieId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([movieId])
+  @@index([createdAt])
+}
+
+// ============================================
+// NOTIFICATIONS & BROADCASTS
+// ============================================
+
+model Broadcast {
+  id              String    @id @default(uuid())
+  message         String
+  mediaType       String?   // photo, video, document
+  mediaUrl        String?
+  targetAudience  String    @default("all") // all, premium, specific
+  targetIds       String[]  @default([])
+  scheduledFor    DateTime?
+  sentAt          DateTime?
+  status          BroadcastStatus @default(PENDING)
+  totalRecipients Int       @default(0)
+  successfulSends Int       @default(0)
+  failedSends     Int       @default(0)
+  createdAt       DateTime  @default(now())
+  createdBy       String?
+  
+  @@index([status])
+  @@index([scheduledFor])
+}
+
+enum BroadcastStatus {
+  PENDING
+  SCHEDULED
+  SENDING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+// ============================================
+// SECURITY & AUDIT
+// ============================================
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  adminId     String?
+  action      String
+  entity      String?
+  entityId    String?
+  oldValues   Json?
+  newValues   Json?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+  
+  admin       Admin?   @relation(fields: [adminId], references: [id])
+  
+  @@index([adminId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+model LoginHistory {
+  id          String   @id @default(uuid())
+  adminId     String
+  ipAddress   String
+  userAgent   String?
+  success     Boolean  @default(true)
+  failureReason String?
+  createdAt   DateTime @default(now())
+  
+  @@index([adminId])
+  @@index([createdAt])
+}
+
+// ============================================
+// CACHE & SESSIONS
+// ============================================
+
+model Session {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  adminId   String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  
+  @@index([token])
+  @@index([expiresAt])
+}
+
+model RateLimit {
+  id         String   @id @default(uuid())
+  identifier String   @unique // IP or user ID
+  action     String
+  count      Int      @default(0)
+  resetAt    DateTime
+  createdAt  DateTime @default(now())
+  
+  @@index([identifier])
+  @@index([resetAt])
+}
+
+// ============================================
+// FILE STORAGE
+// ============================================
+
+model StoredFile {
+  id          String   @id @default(uuid())
+  filename    String
+  originalName String
+  mimeType    String
+  size        BigInt
+  path        String
+  telegramFileId String?
+  uploadedBy  String?
+  createdAt   DateTime @default(now())
+  
+  @@index([telegramFileId])
+}
